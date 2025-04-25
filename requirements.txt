@@ -1,0 +1,17 @@
+pyqt6
+torch
+torchvision
+torchaudio
+numpy
+tensorboard
+pydub
+soundfile
+scipy
+tqdm
+yamlargparse
+pyyaml
+librosa
+pesq
+einops
+rotary-embedding-torch
+torchinfo
