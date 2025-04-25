@@ -10,6 +10,8 @@
 import sys
 import os
 import threading
+import subprocess
+import platform
 from typing import Tuple
 
 import numpy as np
@@ -75,7 +77,8 @@ class MplCanvas(FigureCanvas):
         self.updateGeometry()
 
     def clear(self):
-        self.ax.clear()
+        self.fig.clear()  # 清除整个 figure
+        self.ax = self.fig.add_subplot(111)  # 重新添加主 axes
         self.draw()
 
 
@@ -105,17 +108,26 @@ class MainWindow(QMainWindow):
         self.chk_sr.setChecked(False)
         self.btn_run = QPushButton("开始处理")
         self.btn_run.clicked.connect(self.start_processing)
+        self.btn_clear = QPushButton("清空")
+        self.btn_clear.clicked.connect(self.clear_all)
 
         ctrl_layout.addWidget(self.btn_select)
         ctrl_layout.addWidget(self.lbl_path, stretch=1)
         ctrl_layout.addWidget(self.chk_se)
         ctrl_layout.addWidget(self.chk_sr)
         ctrl_layout.addWidget(self.btn_run)
+        ctrl_layout.addWidget(self.btn_clear)
         main_layout.addLayout(ctrl_layout)
 
-        # === 状态标签 ===
+        # === 状态标签和打开目录按钮 ===
+        status_layout = QHBoxLayout()
         self.lbl_status = QLabel("")
-        main_layout.addWidget(self.lbl_status)
+        self.btn_open_dir = QPushButton("打开目录")
+        self.btn_open_dir.setVisible(False)
+        self.btn_open_dir.clicked.connect(self.open_output_directory)
+        status_layout.addWidget(self.lbl_status, stretch=1)
+        status_layout.addWidget(self.btn_open_dir)
+        main_layout.addLayout(status_layout)
 
         # === 绘图区域 ===
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -150,6 +162,7 @@ class MainWindow(QMainWindow):
             self.file_path = path
             self.lbl_path.setText(os.path.basename(path))
             self.lbl_status.setText("")
+            self.btn_open_dir.setVisible(False)
             # 清空图形
             for c in (self.orig_wave, self.orig_spec, self.proc_wave, self.proc_spec):
                 c.clear()
@@ -165,6 +178,8 @@ class MainWindow(QMainWindow):
             return
 
         self.btn_run.setEnabled(False)
+        self.btn_clear.setEnabled(False)
+        self.btn_open_dir.setEnabled(False)
         self.lbl_status.setText("处理中，请稍候…")
         QApplication.processEvents()
 
@@ -178,18 +193,49 @@ class MainWindow(QMainWindow):
 
     def on_finished(self, success: bool, out_path: str, err: str):  # noqa: D401
         self.btn_run.setEnabled(True)
+        self.btn_clear.setEnabled(True)
         if not success:
             self.lbl_status.setText(f"处理失败: {err}")
             QMessageBox.critical(self, "错误", f"处理失败: {err}")
+            self.btn_open_dir.setVisible(False)
             return
 
         self.out_path = out_path
-        self.lbl_status.setText(f"处理完成: {out_path}")
+        self.lbl_status.setText(f"处理完成: {os.path.basename(out_path)}")
+        self.btn_open_dir.setVisible(True)
+        self.btn_open_dir.setEnabled(True)
         # 绘制前后波形+频谱
         try:
             self._draw_plots()
         except Exception as e:  # pragma: no cover
             QMessageBox.warning(self, "绘图错误", str(e))
+
+    def clear_all(self):
+        """ 清空所有输入、输出和绘图 """
+        self.file_path = None
+        self.out_path = None
+        self.lbl_path.setText("未选择文件")
+        self.lbl_status.setText("")
+        self.btn_open_dir.setVisible(False)
+        for c in (self.orig_wave, self.orig_spec, self.proc_wave, self.proc_spec):
+            c.clear()
+
+    def open_output_directory(self):
+        """ 打开输出文件所在的目录 """
+        if self.out_path and os.path.exists(self.out_path):
+            directory = os.path.dirname(self.out_path)
+            system = platform.system()
+            try:
+                if system == "Windows":
+                    os.startfile(directory)  # type: ignore
+                elif system == "Darwin":  # macOS
+                    subprocess.Popen(["open", directory])
+                else:  # Linux and other Unix-like
+                    subprocess.Popen(["xdg-open", directory])
+            except Exception as e:
+                QMessageBox.warning(self, "错误", f"无法打开目录: {e}")
+        else:
+            QMessageBox.information(self, "提示", "输出文件不存在或路径无效。")
 
     # --------------------------- 绘图 ---------------------------
     def _draw_plots(self):
