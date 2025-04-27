@@ -18,3 +18,5 @@ rotary-embedding-torch
 torchinfo
 matplotlib
 mvector
+plotly
+onnxruntime
