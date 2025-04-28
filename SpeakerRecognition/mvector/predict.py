@@ -86,12 +86,16 @@ class MVectorPredictor:
         if not os.path.exists(self.audio_indexes_path): return
         with open(self.audio_indexes_path, "rb") as f:
             indexes = pickle.load(f)
-        for name, feature, path in zip(indexes["users_name"], indexes["audio_feature"], indexes["users_audio_path"]):
+        audio_features = indexes["audio_feature"]
+        if isinstance(audio_features, np.ndarray) and audio_features.ndim == 1:
+            audio_features = audio_features[np.newaxis, :]
+        for name, feature, path in zip(indexes["users_name"], audio_features, indexes["users_audio_path"]):
             if not os.path.exists(path): continue
             self.users_name.append(name)
             self.users_audio_path.append(path)
             if self.audio_feature is None:
-                self.audio_feature = feature
+                # 首个特征，若为一维则转换为二维
+                self.audio_feature = feature[np.newaxis, :] if isinstance(feature, np.ndarray) and feature.ndim == 1 else feature
             else:
                 self.audio_feature = np.vstack((self.audio_feature, feature))
 
