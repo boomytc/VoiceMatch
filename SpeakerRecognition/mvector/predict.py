@@ -71,6 +71,8 @@ class MVectorPredictor:
         self.users_audio_path = []
         # 每个用户的平均声纹特征对应的用户名称
         self.users_name_mean = []
+        # 目标特征维度
+        self.target_feature_dim = None
         # 加载声纹库
         self.audio_db_path = audio_db_path
         if self.audio_db_path is not None:
@@ -86,18 +88,70 @@ class MVectorPredictor:
         if not os.path.exists(self.audio_indexes_path): return
         with open(self.audio_indexes_path, "rb") as f:
             indexes = pickle.load(f)
-        audio_features = indexes["audio_feature"]
-        if isinstance(audio_features, np.ndarray) and audio_features.ndim == 1:
-            audio_features = audio_features[np.newaxis, :]
-        for name, feature, path in zip(indexes["users_name"], audio_features, indexes["users_audio_path"]):
-            if not os.path.exists(path): continue
-            self.users_name.append(name)
-            self.users_audio_path.append(path)
-            if self.audio_feature is None:
-                # 首个特征，若为一维则转换为二维
-                self.audio_feature = feature[np.newaxis, :] if isinstance(feature, np.ndarray) and feature.ndim == 1 else feature
-            else:
-                self.audio_feature = np.vstack((self.audio_feature, feature))
+
+        loaded_features_2d = indexes.get("audio_feature")
+        loaded_users_name = indexes.get("users_name", [])
+        loaded_users_audio_path = indexes.get("users_audio_path", [])
+
+        if loaded_features_2d is None or not loaded_users_name or not loaded_users_audio_path:
+            self.audio_feature = None
+            self.users_name = []
+            self.users_audio_path = []
+            logger.info("Loaded audio_indexes.bin is empty or incomplete.")
+            return
+
+        if not isinstance(loaded_features_2d, np.ndarray):
+            logger.error(f"Loaded audio_feature is not a numpy array. Type: {type(loaded_features_2d)}. Skipping.")
+            self.audio_feature = None; self.users_name = []; self.users_audio_path = []
+            return
+            
+        if loaded_features_2d.ndim == 1: 
+            logger.warning(f"Loaded audio_feature is 1D, attempting to reshape to (1, D). Shape: {loaded_features_2d.shape}")
+            loaded_features_2d = loaded_features_2d[np.newaxis, :]
+
+        if loaded_features_2d.ndim != 2:
+            logger.error(f"Loaded audio_feature from pickle is not 2D after initial reshape: {loaded_features_2d.shape}. Cannot process.")
+            self.audio_feature = None; self.users_name = []; self.users_audio_path = []
+            return
+        
+        if loaded_features_2d.shape[0] == 0:
+            logger.info("Loaded audio_features_2d is empty. Initializing empty audio_feature.")
+            self.audio_feature = None; self.users_name = []; self.users_audio_path = []
+            return
+
+        valid_audio_features_list = []
+        valid_users_name_list = []
+        valid_users_audio_path_list = []
+
+        min_len = min(len(loaded_users_name), len(loaded_users_audio_path), loaded_features_2d.shape[0])
+        if min_len != loaded_features_2d.shape[0] or min_len != len(loaded_users_name) or min_len != len(loaded_users_audio_path):
+            logger.warning(f"Mismatch in lengths of loaded arrays: features({loaded_features_2d.shape[0]}), names({len(loaded_users_name)}), paths({len(loaded_users_audio_path)}). Using min_len: {min_len}")
+
+        for i in range(min_len):
+            current_path = loaded_users_audio_path[i]
+            if not os.path.exists(current_path):
+                logger.warning(f"Audio path '{current_path}' from index for user '{loaded_users_name[i]}' does not exist. Skipping feature.")
+                continue
+
+            feature_1d = loaded_features_2d[i, :].copy()
+            adjusted_feature_1d = self._adjust_feature_dim(feature_1d) 
+
+            valid_audio_features_list.append(adjusted_feature_1d)
+            valid_users_name_list.append(loaded_users_name[i])
+            valid_users_audio_path_list.append(current_path)
+
+        if valid_audio_features_list:
+            self.audio_feature = np.array(valid_audio_features_list)
+            self.users_name = valid_users_name_list
+            self.users_audio_path = valid_users_audio_path_list
+            logger.info(f"Loaded and adjusted {self.audio_feature.shape[0]} features from audio_indexes.bin. Target dim: {self.target_feature_dim}")
+            if self.audio_feature.ndim != 2 or (self.target_feature_dim is not None and self.audio_feature.shape[1] != self.target_feature_dim):
+                 logger.error(f"CRITICAL: self.audio_feature shape {self.audio_feature.shape} inconsistent with target_dim {self.target_feature_dim} after loading indexes.")
+        else:
+            self.audio_feature = None
+            self.users_name = []
+            self.users_audio_path = []
+            logger.info("No valid features loaded from audio_indexes.bin after filtering.")
 
     # 保存声纹特征索引
     def __write_index(self):
@@ -167,7 +221,38 @@ class MVectorPredictor:
     def normalize_features(features):
         return features / np.linalg.norm(features, axis=1, keepdims=True)
 
-    # 声纹检索
+    def _adjust_feature_dim(self, feature: np.ndarray) -> np.ndarray:
+        """Adjusts the feature to the target dimension by padding or truncating."""
+        if not isinstance(feature, np.ndarray) or feature.ndim != 1:
+            logger.error(f"Feature to adjust must be a 1D numpy array, got {type(feature)} with ndim {feature.ndim if isinstance(feature, np.ndarray) else 'N/A'}.")
+            if isinstance(feature, np.ndarray) and feature.ndim == 2 and feature.shape[0] == 1:
+                logger.warning(f"Adjusting feature with shape {feature.shape} by flattening.")
+                feature = feature.flatten()
+            elif isinstance(feature, np.ndarray) and feature.ndim == 2 and feature.shape[1] == 1:
+                logger.warning(f"Adjusting feature with shape {feature.shape} by flattening (column vector).")
+                feature = feature.flatten()
+            else:
+                logger.error("Cannot adjust feature as it's not 1D or convertible to 1D.")
+                return feature
+
+        if self.target_feature_dim is None:
+            self.target_feature_dim = feature.shape[0]
+            logger.info(f"Target feature dimension initialized to: {self.target_feature_dim} from a feature of shape {feature.shape}")
+            return feature
+
+        current_dim = feature.shape[0]
+        if current_dim == self.target_feature_dim:
+            return feature
+        elif current_dim < self.target_feature_dim:
+            padding = np.zeros(self.target_feature_dim - current_dim, dtype=feature.dtype)
+            adjusted_feature = np.concatenate((feature, padding))
+            logger.warning(f"Feature padded from {current_dim} to {self.target_feature_dim}.")
+            return adjusted_feature
+        else:
+            adjusted_feature = feature[:self.target_feature_dim]
+            logger.warning(f"Feature truncated from {current_dim} to {self.target_feature_dim}.")
+            return adjusted_feature
+
     def __retrieval(self, np_feature):
         if isinstance(np_feature, list):
             np_feature = np.array(np_feature)
@@ -259,12 +344,43 @@ class MVectorPredictor:
         input_lens_ratio = torch.tensor(input_lens_ratio, dtype=torch.float32)
         audio_feature = self._audio_featurizer(inputs, input_lens_ratio).to(self.device)
         # 执行预测
-        features = []
+        features_list = []
         for i in range(0, input_size, batch_size):
-            feature = self.predictor(audio_feature[i:i + batch_size]).data.cpu().numpy()
-            features.extend(feature)
-        features = np.array(features)
-        return features
+            batch_audio_feature = audio_feature[i:i + batch_size]
+            feature_output = self.predictor(batch_audio_feature).data.cpu().numpy()
+            features_list.extend(feature_output)
+        
+        raw_features_2d = np.array(features_list)
+
+        if raw_features_2d.ndim == 2 and raw_features_2d.shape[0] > 0:
+            adjusted_batch_features_list = []
+            for i in range(raw_features_2d.shape[0]):
+                feature_row_1d = raw_features_2d[i, :].copy()
+                if feature_row_1d.ndim != 1:
+                    logger.error(f"Unexpected feature row dimension in predict_batch: {feature_row_1d.shape}")
+                    adjusted_batch_features_list.append(feature_row_1d)
+                    continue
+                
+                adj_feat_row = self._adjust_feature_dim(feature_row_1d)
+                adjusted_batch_features_list.append(adj_feat_row)
+            
+            if adjusted_batch_features_list:
+                if self.target_feature_dim is not None:
+                    final_features_np = np.empty((len(adjusted_batch_features_list), self.target_feature_dim), dtype=raw_features_2d.dtype)
+                    for idx, feat in enumerate(adjusted_batch_features_list):
+                        if feat.shape[0] == self.target_feature_dim:
+                            final_features_np[idx, :] = feat
+                        else:
+                            logger.error(f"Post-adjustment feature dim mismatch in predict_batch. Expected {self.target_feature_dim}, got {feat.shape[0]}. Using original for this item.")
+                            final_features_np = np.array(adjusted_batch_features_list)
+                else:
+                    logger.warning("target_feature_dim is None after batch adjustment in predict_batch. Returning raw features.")
+                    final_features_np = raw_features_2d
+                return final_features_np
+            else:
+                 return raw_features_2d
+        else:
+            return raw_features_2d
 
     def contrast(self, audio_data1, audio_data2):
         """声纹对比
@@ -292,43 +408,93 @@ class MVectorPredictor:
         """
         # 加载音频文件
         audio_segment = self._load_audio(audio_data=audio_data, sample_rate=sample_rate)
-        feature = self.predict(audio_data=audio_segment)
+        raw_feature = self.predict(audio_data=audio_segment)
+
+        if not isinstance(raw_feature, np.ndarray) or raw_feature.ndim != 1:
+             logger.error(f"Raw feature from self.predict() is not 1D numpy array, shape: {raw_feature.shape if isinstance(raw_feature, np.ndarray) else type(raw_feature)}. Cannot register.")
+             return False, "特征提取失败"
+
+        feature = self._adjust_feature_dim(raw_feature.copy())
+
+        feature_to_stack = feature[np.newaxis, :]
+
         if self.audio_feature is None:
-            self.audio_feature = feature
+            self.audio_feature = feature_to_stack
         else:
-            self.audio_feature = np.vstack((self.audio_feature, feature))
-        # 保存
-        if not os.path.exists(os.path.join(self.audio_db_path, user_name)):
-            audio_path = os.path.join(self.audio_db_path, user_name, '0.wav')
+            if self.audio_feature.shape[1] != self.target_feature_dim:
+                logger.error(f"CRITICAL: Dimension mismatch for existing self.audio_feature. "
+                             f"Shape: {self.audio_feature.shape}, Target dim: {self.target_feature_dim}. "
+                             "This indicates a persistent inconsistency not resolved by loading. "
+                             "Attempting to register new feature might fail or corrupt further.")
+                if self.audio_feature.shape[1] != feature_to_stack.shape[1]:
+                    logger.critical(f"Cannot vstack. self.audio_feature.shape[1] ({self.audio_feature.shape[1]}) != feature_to_stack.shape[1] ({feature_to_stack.shape[1]})")
+                    return False, "声纹库维度不一致"
+
+            self.audio_feature = np.vstack((self.audio_feature, feature_to_stack))
+        
+        # 保存音频文件
+        user_audio_dir = os.path.join(self.audio_db_path, user_name)
+        os.makedirs(user_audio_dir, exist_ok=True)
+        if not os.listdir(user_audio_dir):
+            audio_path = os.path.join(user_audio_dir, '0.wav')
         else:
-            audio_path = os.path.join(self.audio_db_path, user_name,
-                                      f'{len(os.listdir(os.path.join(self.audio_db_path, user_name)))}.wav')
-        os.makedirs(os.path.dirname(audio_path), exist_ok=True)
+            existing_files = [f for f in os.listdir(user_audio_dir) if f.endswith('.wav') and f[:-4].isdigit()]
+            next_num = 0
+            if existing_files:
+                next_num = max([int(f[:-4]) for f in existing_files]) + 1
+            audio_path = os.path.join(user_audio_dir, f'{next_num}.wav')
+            
         audio_segment.to_wav_file(audio_path)
-        self.users_audio_path.append(audio_path.replace('\\', '/'))
+        self.users_audio_path.append(audio_path.replace('\\\\', '/'))
         self.users_name.append(user_name)
-        self.__write_index()
-        # 更新检索的特征
+        
+        try:
+            self.__write_index()
+        except Exception as e:
+            logger.error(f"Error writing index file: {e}")
+            return False, f"写入索引失败: {e}"
+
+        if self.audio_feature_mean is not None and self.audio_feature_mean.shape[1] != self.target_feature_dim:
+            logger.warning(f"self.audio_feature_mean dimension ({self.audio_feature_mean.shape[1]}) "
+                           f"differs from target dimension ({self.target_feature_dim}). Rebuilding mean features.")
+            self.audio_feature_mean = None 
+            self.users_name_mean = []
+            unique_user_names = sorted(list(set(self.users_name)))
+            if unique_user_names:
+                temp_mean_features_list = []
+                for u_name in unique_user_names:
+                    u_indexes = [idx for idx, val in enumerate(self.users_name) if val == u_name]
+                    if u_indexes:
+                        mean_feat = self.audio_feature[u_indexes].mean(axis=0)
+                        temp_mean_features_list.append(mean_feat)
+                if temp_mean_features_list:
+                    self.audio_feature_mean = np.array(temp_mean_features_list)
+                    self.users_name_mean = unique_user_names
+
         if user_name in self.users_name_mean:
-            index = self.users_name_mean.index(user_name)
-            indexes = [idx for idx, val in enumerate(self.users_name) if val == user_name]
-            mean_feature_for_user = self.audio_feature[indexes].mean(axis=0)
-            # 确保形状为 (1, embedding_size)
-            if mean_feature_for_user.ndim == 1:
-                mean_feature_for_user = mean_feature_for_user[np.newaxis, :]
-            self.audio_feature_mean[index] = mean_feature_for_user
+            idx_mean = self.users_name_mean.index(user_name)
+            current_user_indexes = [i for i, u in enumerate(self.users_name) if u == user_name]
+            if current_user_indexes:
+                mean_feature_for_user = self.audio_feature[current_user_indexes].mean(axis=0)
+                self.audio_feature_mean[idx_mean] = mean_feature_for_user
         else:
-            self.users_name_mean.append(user_name)
-            # 确保 feature 的形状是 (1, embedding_size)
-            if feature.ndim == 1:
-                feature = feature[np.newaxis, :]
-                
+            adjusted_feature_for_mean = feature[np.newaxis, :]
+
             if self.audio_feature_mean is None:
-                # 如果是第一个用户，直接赋值
-                self.audio_feature_mean = feature
+                if not self.users_name_mean:
+                     self.audio_feature_mean = adjusted_feature_for_mean
+                     self.users_name_mean.append(user_name)
+                else:
+                     self.audio_feature_mean = np.vstack((self.audio_feature_mean, adjusted_feature_for_mean))
+                     self.users_name_mean.append(user_name)
+
             else:
-                # 否则，进行堆叠
-                self.audio_feature_mean = np.vstack((self.audio_feature_mean, feature))
+                 current_user_indexes = [i for i, u in enumerate(self.users_name) if u == user_name]
+                 mean_feature_for_user = self.audio_feature[current_user_indexes].mean(axis=0)
+
+                 self.audio_feature_mean = np.vstack((self.audio_feature_mean, mean_feature_for_user[np.newaxis, :]))
+                 self.users_name_mean.append(user_name)
+                 
         return True, "注册成功"
 
     def recognition(self, audio_data, threshold=None, sample_rate=16000):

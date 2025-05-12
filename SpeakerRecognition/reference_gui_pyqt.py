@@ -1,13 +1,13 @@
 import sys
 import os
 import glob
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
+from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QGridLayout, QLabel, QLineEdit, 
                             QPushButton, QFileDialog, QTextEdit, QTabWidget,
                             QGroupBox, QMessageBox, QListWidget, QInputDialog, QRadioButton,
                             QDialog, QScrollArea)
-from PyQt6.QtCore import QUrl
-from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
+from PySide6.QtCore import QUrl
+from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 import shutil
 
 from mvector.predict import MVectorPredictor
@@ -476,9 +476,9 @@ class ReferenceGUI(QMainWindow):
         
         reply = QMessageBox.question(self, "确认删除", 
                                     f"确定要删除用户 '{user_name}' 及其所有声纹数据吗？",
-                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                                    QMessageBox.Yes | QMessageBox.No)
         
-        if reply == QMessageBox.StandardButton.Yes:
+        if reply == QMessageBox.Yes:
             try:
                 self.statusBar().showMessage(f"正在删除用户 '{user_name}'...")
                 self.manage_db_result.clear()
@@ -691,9 +691,9 @@ class ReferenceGUI(QMainWindow):
         """清空声纹库"""
         reply = QMessageBox.question(self, "确认清空", 
                                     "确定要清空整个声纹库吗？此操作不可恢复！",
-                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                                    QMessageBox.Yes | QMessageBox.No)
         
-        if reply == QMessageBox.StandardButton.Yes:
+        if reply == QMessageBox.Yes:
             confirm_text, ok = QInputDialog.getText(self, "二次确认", 
                                                  "请输入'确认清空'以继续操作:")
             
