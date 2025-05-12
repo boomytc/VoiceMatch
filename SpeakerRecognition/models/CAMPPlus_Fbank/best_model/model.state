@@ -1,3 +1,11 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:1045f42cb19f2fcc92f03547c2eff88cd71367541d14ed3d96588313c17982e4
-size 260
+{
+    "last_epoch": 27,
+    "version": "1.1.6",
+    "model_conf.model": "CAMPPlus",
+    "feature_method": "Fbank",
+    "loss": "AAMLoss",
+    "threshold": 0.17558297514915466,
+    "eer": 0.1445789918332864,
+    "min_dcf": 0.6744780458437892,
+    "margin": 0.1429622716142497
+}
