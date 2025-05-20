@@ -1,4 +1,3 @@
 *.pyc
 audio_db/
-models/
 __pycache__/
