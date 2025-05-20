@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-基于 PyQt6 的图形界面
+基于 PySide6 的图形界面
 1. 选择音频文件
 2. 选择执行语音增强 / 超分辨率
 3. 调用 speech_enhancement.process_file 处理
@@ -26,11 +26,11 @@ matplotlib.rcParams['axes.unicode_minus'] = False
 from matplotlib.figure import Figure
 
 try:
-    from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas  # matplotlib>=3.5
+    from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas  # 适用于 PySide6/PyQt6
 except ImportError:  # 兼容旧版本
     from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas  # type: ignore
 
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
     QWidget,
@@ -44,7 +44,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QSplitter,
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QObject
+from PySide6.QtCore import Qt, Signal, QObject
 
 # 导入处理函数
 sys.path.append(os.path.dirname(__file__))
@@ -54,7 +54,7 @@ from speech_enhancement import process_file  # noqa: E402
 class Worker(QObject):
     """后台线程执行音频处理"""
 
-    finished = pyqtSignal(bool, str, str)  # success, output_path, error_msg
+    finished = Signal(bool, str, str)  # success, output_path, error_msg
 
     def __init__(self, args: Tuple[str, int, bool, bool, str | None]):
         super().__init__()
