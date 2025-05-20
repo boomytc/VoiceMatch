@@ -2,8 +2,6 @@
 
 VoiceMatch是一个综合性语音处理工具包，集成了声纹识别和语音增强两大核心功能模块，旨在提供高质量的语音处理解决方案。
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-
 ## 📋 目录
 
 - [功能特点](#功能特点)
@@ -168,16 +166,3 @@ VoiceMatch集成了多种语音处理模型：
 1. **[MossFormer2_SE_48K](https://huggingface.co/alibabasglab/MossFormer2_SE_48K)**：48kHz语音增强模型，用于去除背景噪音
 2. **[MossFormer2_SR_48K](https://huggingface.co/alibabasglab/MossFormer2_SR_48K)**：48kHz语音超分辨率模型，用于提升音频质量
 
-## 🤝 贡献指南
-
-欢迎为VoiceMatch项目做出贡献！
-
-1. Fork本仓库
-2. 创建您的特性分支 (`git checkout -b feature/amazing-feature`)
-3. 提交您的更改 (`git commit -m 'Add some amazing feature'`)
-4. 推送到分支 (`git push origin feature/amazing-feature`)
-5. 打开Pull Request
-
-## 📄 许可证
-
-本项目采用MIT许可证 - 详情请参阅 [LICENSE](LICENSE) 文件
