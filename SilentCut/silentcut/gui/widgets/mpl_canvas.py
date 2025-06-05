@@ -1,7 +1,7 @@
 """
-自定义 Matplotlib 画布小部件，用于在 PyQt6 中显示波形图
+自定义 Matplotlib 画布小部件，用于在 PySide6 中显示波形图
 """
-from PyQt6.QtWidgets import QWidget, QVBoxLayout
+from PySide6.QtWidgets import QWidget, QVBoxLayout
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 import numpy as np
@@ -48,7 +48,7 @@ _configure_matplotlib_fonts()
 
 
 class MplCanvas(FigureCanvasQTAgg):
-    """Matplotlib 画布，可集成到 PyQt 应用中"""
+    """Matplotlib 画布，可集成到 PySide6 应用中"""
     
     def __init__(self, width=5, height=4, dpi=100):
         """初始化画布"""

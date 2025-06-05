@@ -4,11 +4,11 @@
 import os
 import librosa
 import numpy as np
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QPushButton, QFileDialog, 
     QLabel, QProgressBar, QMessageBox
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PySide6.QtCore import Qt, QThread, Signal
 
 from silentcut.gui.widgets import WaveformCanvas
 from silentcut.utils.logger import get_logger
@@ -19,8 +19,8 @@ logger = get_logger("gui.waveform_controller")
 
 class AudioLoadWorker(QThread):
     """音频加载工作线程"""
-    finished_signal = pyqtSignal(bool, object, str)
-    progress_signal = pyqtSignal(int)
+    finished_signal = Signal(bool, object, str)
+    progress_signal = Signal(int)
     
     def __init__(self, file_path):
         super().__init__()

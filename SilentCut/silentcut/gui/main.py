@@ -5,8 +5,8 @@ import sys
 import os
 import multiprocessing
 import platform
-from PyQt6.QtWidgets import QApplication
-from PyQt6.QtGui import QFont
+from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QFont
 
 # 导入 SilentCut 模块
 from silentcut.utils.logger import get_logger

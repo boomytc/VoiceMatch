@@ -28,7 +28,7 @@ setup(
         "librosa>=0.9.0",
         "numpy>=1.20.0",
         "matplotlib>=3.4.0",
-        "PyQt6>=6.2.0",
+        "PySide6>=6.2.0",
         "streamlit>=1.10.0",
         "soundfile>=0.10.3",
     ],

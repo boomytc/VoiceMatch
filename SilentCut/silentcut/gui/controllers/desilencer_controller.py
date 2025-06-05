@@ -6,12 +6,12 @@ import time
 import tempfile
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, 
     QFileDialog, QTextEdit, QSpinBox, QProgressBar, QMessageBox,
     QRadioButton, QButtonGroup, QCheckBox, QGroupBox
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PySide6.QtCore import Qt, QThread, Signal
 
 from silentcut.audio.processor import AudioProcessor, PRESET_THRESHOLDS
 from silentcut.utils.logger import get_logger
@@ -101,10 +101,10 @@ def test_threshold_task(args):
 
 class Worker(QThread):
     """处理音频的工作线程，避免冻结 GUI"""
-    progress_signal = pyqtSignal(int) # 进度信号 (0-100 for batch, 0/100 for single)
-    log_signal = pyqtSignal(str)      # 日志信号
-    finished_signal = pyqtSignal(bool, str) # 完成信号 (success, message)
-    processing_detail_signal = pyqtSignal(dict) # 音频处理详细信息信号
+    progress_signal = Signal(int) # 进度信号 (0-100 for batch, 0/100 for single)
+    log_signal = Signal(str)      # 日志信号
+    finished_signal = Signal(bool, str) # 完成信号 (success, message)
+    processing_detail_signal = Signal(dict) # 音频处理详细信息信号
     
     def __init__(self, mode, input_path, output_dir, min_silence_len,
                  use_multiprocessing=False, num_cores=1, 
