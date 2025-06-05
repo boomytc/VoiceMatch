@@ -1,3 +1,5 @@
 *.pyc
 audio_db/
 __pycache__/
+SpeechEnhance/checkpoints/*
+SpeakerRecognition/models/*
